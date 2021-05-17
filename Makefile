@@ -9,6 +9,23 @@ GO_LDFLAGS := "-X github.com/AndrewChubatiuk/nomad-hcloud-autoscaler/version.Git
 # Attempt to use gotestsum for running tests, otherwise fallback to go test.
 GO_TEST_CMD = $(if $(shell command -v gotestsum 2>/dev/null),gotestsum --,go test)
 
+.PHONY: tools
+tools: lint-tools test-tools
+
+.PHONY: test-tools
+test-tools: ## Install the tools used to run tests
+	@echo "==> Installing test tools..."
+	GO111MODULE=on go get gotest.tools/gotestsum@v0.6.0
+	@echo "==> Done"
+
+.PHONY: lint-tools
+lint-tools: ## Install the tools used to lint
+	@echo "==> Installing lint tools..."
+	GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.24.0
+	GO111MODULE=on go get -u honnef.co/go/tools/cmd/staticcheck@2020.1.6
+	GO111MODULE=on go get github.com/hashicorp/go-hclog/hclogvet@v0.1.3
+	@echo "==> Done"
+
 .PHONY: build
 build:
 	@echo "==> Building HCloud autoscaler..."
