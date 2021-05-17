@@ -1,0 +1,70 @@
+version: 2.1
+
+executors:
+  go-linux:
+    resource_class: medium
+    docker:
+      - image: docker.mirror.hashicorp.services/golang:1.16.3
+    shell: /usr/bin/env bash -euo pipefail -c
+    environment:
+      GO111MODULE: "on"
+    working_directory: /go/src/github.com/AndrewChubatiuk/nomad-hcloud-autoscaler
+
+jobs:
+  check-deps-go:
+    executor: go-linux
+    steps:
+      - checkout
+      - run: make check
+
+  lint-go:
+    executor: go-linux
+    steps:
+      - checkout
+      - run: make lint
+
+  linux-build-go:
+    executor: go-linux
+    steps:
+      - checkout
+      - run: make build
+      - persist_to_workspace:
+          root: ./bin/
+          paths:
+            - "*"
+
+  linux-test-go:
+    executor: go-linux
+    steps:
+      - checkout
+      - run: make test
+
+  release:
+    docker:
+      - image: cibuilds/github:0.10
+    steps:
+      - attach_workspace:
+          at: ./bin/
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} ./bin/s
+
+workflows:
+  ci:
+    jobs:
+      - check-deps-go
+      - lint-go
+      - linux-build-go
+      - linux-test-go
+      - release:
+          requires:
+            - check-deps-go
+            - lint-go
+            - linux-build-go
+            s- linux-test-go
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
