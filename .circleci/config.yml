@@ -55,10 +55,22 @@ jobs:
 workflows:
   ci:
     jobs:
-      - check-deps-go
-      - lint-go
-      - linux-build-go
-      - linux-test-go
+      - check-deps-go:
+          filters:
+              tags:
+                only: /^v\d+\.\d+\.\d+$/
+      - lint-go:
+          filters:
+              tags:
+                only: /^v\d+\.\d+\.\d+$/
+      - linux-build-go:
+          filters:
+              tags:
+                only: /^v\d+\.\d+\.\d+$/
+      - linux-test-go:
+          filters:
+              tags:
+                only: /^v\d+\.\d+\.\d+$/
       - release:
           requires:
             - check-deps-go
