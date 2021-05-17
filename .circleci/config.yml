@@ -62,7 +62,7 @@ workflows:
             - check-deps-go
             - lint-go
             - linux-build-go
-            s- linux-test-go
+            - linux-test-go
           filters:
             branches:
               ignore: /.*/
