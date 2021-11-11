@@ -29,6 +29,7 @@ const (
 	configKeyLabels     = "hcloud_labels"
 	configKeyServerType = "hcloud_server_type"
 	configKeyNamePrefix = "hcloud_name_prefix"
+	configKeyNetworks   = "hcloud_networks"
 )
 
 var (
