@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultRetryInterval   = 10 * time.Second
+	defaultRetryInterval   = 60 * time.Second
 	defaultRetryLimit      = 5
 	defaultPerPage         = 50
 	defaultRandomSuffixLen = 10
@@ -121,6 +121,22 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		opts.Labels = labelsResult
 	}
 
+	networks, ok := config[configKeyNetworks]
+	if !ok {
+		return fmt.Errorf("required config param %s not found", configKeyNetworks)
+	} else {
+		for _, networkValue := range strings.Split(networks, ",") {
+			network, _, err := t.hcloud.Network.Get(ctx, networkValue)
+			if err != nil {
+				return fmt.Errorf("failed to get HCloud Network: %v", err)
+			}
+			if network == nil {
+				return fmt.Errorf("HCloud network not found: %s", networkValue)
+			}
+			opts.Networks = append(opts.Networks, network)
+		}
+	}
+
 	f := func(ctx context.Context) (bool, error) {
 		var results []hcloud.ServerCreateResult
 		countDiff := count - int64(len(servers))
@@ -166,7 +182,7 @@ func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, co
 		return errors.New("required ClusterNodeIDLookupFunc not set")
 	}
 
-	nodes, err := t.clusterUtils.IdentifyScaleInNodes(config, len(servers))
+	nodes, err := t.clusterUtils.IdentifyScaleInNodes(config, int(count))
 	if err != nil {
 		return err
 	}
