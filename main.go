@@ -1,9 +1,9 @@
 package main
 
 import (
+	hcloud "github.com/AndrewChubatiuk/nomad-hcloud-autoscaler/plugin"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-autoscaler/plugins"
-	hcloud "github.com/AndrewChubatiuk/nomad-hcloud-autoscaler/plugin"
 )
 
 func main() {

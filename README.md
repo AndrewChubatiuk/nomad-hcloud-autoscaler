@@ -47,7 +47,7 @@ template {
 ```
 template {
     data = <<-EOF
-    scaling  "cluster_class-batch"{
+    scaling  "cluster_class-batch" {
         enabled = true
         min     = 1
         max     = 2
