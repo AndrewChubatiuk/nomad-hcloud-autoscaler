@@ -15,15 +15,15 @@ tools: lint-tools test-tools
 .PHONY: test-tools
 test-tools: ## Install the tools used to run tests
 	@echo "==> Installing test tools..."
-	GO111MODULE=on go get gotest.tools/gotestsum@v0.6.0
+	GO111MODULE=on go install gotest.tools/gotestsum@v1.7.0
 	@echo "==> Done"
 
 .PHONY: lint-tools
 lint-tools: ## Install the tools used to lint
 	@echo "==> Installing lint tools..."
-	GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.24.0
-	GO111MODULE=on go get -u honnef.co/go/tools/cmd/staticcheck@2020.1.6
-	GO111MODULE=on go get github.com/hashicorp/go-hclog/hclogvet@v0.1.3
+	GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.43.0
+	GO111MODULE=on go install -u honnef.co/go/tools/cmd/staticcheck@2021.1.2
+	GO111MODULE=on go install github.com/hashicorp/go-hclog/hclogvet@v1.0.0
 	@echo "==> Done"
 
 .PHONY: build
