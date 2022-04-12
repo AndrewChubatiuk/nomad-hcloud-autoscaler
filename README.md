@@ -75,7 +75,7 @@ template {
             hcloud_user_data = ""
             hcloud_ssh_keys = "XXX"
             hcloud_server_type = "cx11"
-            hcloud_name_prefix = "XXX"
+            hcloud_group_id = "XXX"
             hcloud_labels = "XXX_node=true"
             hcloud_networks = "XXX"
         }
