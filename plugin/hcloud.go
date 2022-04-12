@@ -272,11 +272,14 @@ func extractLabels(labelsStr string) (map[string]string, error) {
 	labels := make(map[string]string)
 	labelStrs := strings.Split(labelsStr, ",")
 	for _, labelStr := range labelStrs {
+		if labelStr == "" {
+			continue
+		}
 		labelValues := strings.Split(labelStr, "=")
 		if len(labelValues) == 2 {
 			labels[strings.TrimSpace(labelValues[0])] = strings.TrimSpace(labelValues[1])
 		} else {
-			return nil, fmt.Errorf("failed to parse labels: %s", labelsStr)
+			return nil, fmt.Errorf("failed to parse labels %s", labelsStr)
 		}
 	}
 	return labels, nil
