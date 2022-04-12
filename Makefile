@@ -32,7 +32,7 @@ build:
 	@CGO_ENABLED=0 GO111MODULE=on \
 	go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o ./bin/nomad-hcloud-autoscaler
+	-o ./bin/hcloud-server
 	@echo "==> Done"
 
 .PHONY: lint
@@ -66,5 +66,5 @@ test: ## Test the source code
 .PHONY: clean
 clean:
 	@echo "==> Cleaning build artifacts..."
-	@rm -f ./bin/nomad-hcloud-autoscaler
+	@rm -f ./bin/*
 	@echo "==> Done"

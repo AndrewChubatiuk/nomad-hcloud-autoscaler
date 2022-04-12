@@ -97,21 +97,19 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		}
 	}
 
-	labelSelector, ok := config[configKeyLabels]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyLabels)
-	} else {
-		labels, err := extractLabels(labelSelector)
+	labels := make(map[string]string)
+
+	if labelSelector, ok := config[configKeyLabels]; ok {
+		labels, err = extractLabels(labelSelector)
 		if err != nil {
-			return fmt.Errorf("failed to parse labels during instance scale_out: %v", err)
+			return fmt.Errorf("failed to parse labels: %v", err)
 		}
-		labels[groupIDLabel] = config[configKeyGroupID]
-		opts.Labels = labels
 	}
 
-	if networks, ok := config[configKeyNetworks]; !ok {
-		return fmt.Errorf("required config param %s not found", configKeyNetworks)
-	} else {
+	labels[groupIDLabel] = config[configKeyGroupID]
+	opts.Labels = labels
+
+	if networks, ok := config[configKeyNetworks]; ok {
 		for _, networkValue := range strings.Split(networks, ",") {
 			network, _, err := t.hcloud.Network.Get(ctx, networkValue)
 			if err != nil {
