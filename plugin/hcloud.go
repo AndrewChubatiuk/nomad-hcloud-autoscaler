@@ -149,7 +149,8 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		if err != nil {
 			log.Error("failed to wait till all HCloud create actions are ready", err)
 		}
-		servers, err = t.getServers(ctx, labels)
+		labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, config[configKeyGroupID])
+		servers, err = t.getServers(ctx, labelSelector)
 		if err != nil {
 			return false, fmt.Errorf("failed to get a new servers count during instance scale out: %v", err)
 		}
