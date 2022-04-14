@@ -1,0 +1,30 @@
+region    = "global"
+log_level = "INFO"
+data_dir  =  "/opt/nomad"
+bind_addr = "0.0.0.0"
+server = {
+  enabled          = %{ if length(servers) == 0 }true%{else}false%{ endif }
+  bootstrap_expect = 1
+}
+advertise = {
+  http = "{{ GetInterfaceIP \"${interface}\" }}"
+  rpc  = "{{ GetInterfaceIP \"${interface}\" }}"
+  serf = "{{ GetInterfaceIP \"${interface}\" }}"
+}
+client = {
+  node_class = "${node_class}"
+  enabled    = true%{ if length(servers) > 0 }
+  servers    = ["${ join("\",\"", servers) }"]
+%{ endif }
+}
+telemetry = {
+  prometheus_metrics         = true
+  publish_allocation_metrics = true
+  publish_node_metrics       = true
+}
+acl = {
+  enabled           = true
+  token_ttl         = "30s"
+  policy_ttl        = "60s"
+  replication_token = ""
+}
