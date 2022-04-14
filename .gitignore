@@ -1,2 +1,9 @@
 bin/*
-
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+*.tfplan
+**/.terraform/*
+creds.json
+.vscode

@@ -1,6 +1,15 @@
 # nomad-hcloud-autoscaler
 
-Example configuration
+## Demo
+Run `terraform apply` in [demo](demo/setup) folder to create: 
+ - nomad server which runs services for:
+    - nomad-autoscaler
+    - prometheus
+    - redis
+Autoscaler scales hcloud nodes for redis. After successful run both Nomad and Consul are wide-world open and credentials for both you can find in terraform output
+
+
+## Configuration
 
 `config.hcl`
 ```
@@ -75,7 +84,7 @@ template {
             hcloud_user_data = ""
             hcloud_ssh_keys = "XXX"
             hcloud_server_type = "cx11"
-            hcloud_name_prefix = "XXX"
+            hcloud_group_id = "XXX"
             hcloud_labels = "XXX_node=true"
             hcloud_networks = "XXX"
         }

@@ -2,15 +2,13 @@ package plugin
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
+	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hashicorp/nomad-autoscaler/sdk/helper/scaleutils"
 	"github.com/hashicorp/nomad/api"
 	"github.com/hetznercloud/hcloud-go/hcloud"
 )
@@ -39,15 +37,9 @@ func (t *TargetPlugin) setupHCloudClient(config map[string]string) error {
 // scaleOut adds HCloud servers up to desired count to match what the
 // Autoscaler has deemed required.
 func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string) error {
-
-	namePrefix, ok := config[configKeyNamePrefix]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyNamePrefix)
-	}
-
 	// Create a logger for this action to pre-populate useful information we
 	// would like on all log lines.
-	log := t.logger.With("action", "scale_out", "hcloud_name_prefix", namePrefix,
+	log := t.logger.With("action", "scale_out", "hcloud_group_id", config[configKeyGroupID],
 		"desired_count", count)
 
 	location, ok := config[configKeyLocation]
@@ -74,14 +66,29 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		return fmt.Errorf("required config param %s not found", configKeyUserData)
 	}
 
-	serverType, ok := config[configKeyServerType]
-	if !ok {
+	b64UserDataEncoded := false
+	if _, ok := config[configKeyB64UserDataEncoded]; ok {
+		b64UserDataEncoded, err = strconv.ParseBool(config[configKeyB64UserDataEncoded])
+		if err != nil {
+			return fmt.Errorf("failed to parse %s parameter: %v", configKeyB64UserDataEncoded, err)
+		}
+	}
+
+	if _, ok := config[configKeyServerType]; !ok {
 		return fmt.Errorf("required config param %s not found", configKeyServerType)
+	}
+
+	if b64UserDataEncoded {
+		userDataBytes, err := base64.StdEncoding.DecodeString(userData)
+		userData = string(userDataBytes)
+		if err != nil {
+			return fmt.Errorf("failed to perform b64 decode of user data: %v", err)
+		}
 	}
 
 	opts := hcloud.ServerCreateOpts{
 		ServerType: &hcloud.ServerType{
-			Name: serverType,
+			Name: config[configKeyServerType],
 		},
 		UserData: userData,
 		Image:    image,
@@ -94,8 +101,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		opts.Datacenter = &hcloud.Datacenter{Name: datacenter}
 	}
 
-	sshKeys, ok := config[configKeySSHKeys]
-	if !ok {
+	if sshKeys, ok := config[configKeySSHKeys]; !ok {
 		return fmt.Errorf("required config param %s not found", configKeySSHKeys)
 	} else {
 		for _, sshKeyValue := range strings.Split(sshKeys, ",") {
@@ -110,21 +116,19 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		}
 	}
 
-	labels, ok := config[configKeyLabels]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyLabels)
-	} else {
-		labelsResult, err := extractLabels(labels)
+	labels := make(map[string]string)
+
+	if labelSelector, ok := config[configKeyLabels]; ok {
+		labels, err = extractLabels(labelSelector)
 		if err != nil {
-			return fmt.Errorf("failed to parse labels during instance scale_out: %v", err)
+			return fmt.Errorf("failed to parse labels: %v", err)
 		}
-		opts.Labels = labelsResult
 	}
 
-	networks, ok := config[configKeyNetworks]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyNetworks)
-	} else {
+	labels[groupIDLabel] = config[configKeyGroupID]
+	opts.Labels = labels
+
+	if networks, ok := config[configKeyNetworks]; ok {
 		for _, networkValue := range strings.Split(networks, ",") {
 			network, _, err := t.hcloud.Network.Get(ctx, networkValue)
 			if err != nil {
@@ -144,10 +148,11 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		for counter < countDiff {
 			id := uuid.New()
 			suffix := strings.Replace(id.String(), "-", "", -1)[:defaultRandomSuffixLen]
-			opts.Name = fmt.Sprintf("%s-%s", namePrefix, suffix)
+			opts.Name = fmt.Sprintf("%s-%s", config[configKeyGroupID], suffix)
 			result, _, err := t.hcloud.Server.Create(ctx, opts)
 			if err != nil {
 				log.Error("failed to create an HCloud server", err)
+				break
 			}
 			results = append(results, result)
 			counter++
@@ -162,7 +167,8 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		if err != nil {
 			log.Error("failed to wait till all HCloud create actions are ready", err)
 		}
-		servers, err = t.getServers(ctx, labels)
+		labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, config[configKeyGroupID])
+		servers, err = t.getServers(ctx, labelSelector)
 		if err != nil {
 			return false, fmt.Errorf("failed to get a new servers count during instance scale out: %v", err)
 		}
@@ -176,169 +182,42 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 	return retry(ctx, defaultRetryInterval, defaultRetryLimit, f)
 }
 
-func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string) error {
-
-	if t.clusterUtils.ClusterNodeIDLookupFunc == nil {
-		return errors.New("required ClusterNodeIDLookupFunc not set")
-	}
-
-	nodes, err := t.clusterUtils.IdentifyScaleInNodes(config, int(count))
-	if err != nil {
-		return err
-	}
-
-	nodeResourceIDs, err := t.clusterUtils.IdentifyScaleInRemoteIDs(nodes)
-	if err != nil {
-		return err
-	}
-
-	// Any error received here indicates misconfiguration between the Hetzner servers and
-	// the Nomad node pool.
-	err = validateServers(servers, nodeResourceIDs)
-	if err != nil {
-		return err
-	}
-
-	if err := t.clusterUtils.DrainNodes(ctx, config, nodeResourceIDs); err != nil {
-		return err
-	}
-	t.logger.Info("pre scale-in tasks now complete")
-
-	namePrefix, ok := config[configKeyNamePrefix]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyNamePrefix)
-	}
-
+func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string) (err error) {
 	// Create a logger for this action to pre-populate useful information we
 	// would like on all log lines.
-	log := t.logger.With("action", "scale_in", "hcloud_name_prefix", namePrefix)
-
-	var failedIDs, successfulIDs []scaleutils.NodeResourceID
-	f := func(ctx context.Context) (bool, error) {
-		actionIDs := make(map[int]scaleutils.NodeResourceID)
-		for _, node := range nodeResourceIDs {
-			var id int
-			for _, server := range servers {
-				if server.Name == node.RemoteResourceID {
-					id = server.ID
-					break
-				}
-			}
-			serverInput := hcloud.Server{
-				ID: id,
-			}
-			resp, err := t.hcloud.Server.Delete(ctx, &serverInput)
-			if err != nil {
-				log.Error("failed to delete a HCloud server",
-					"server_id", node.RemoteResourceID, "node_id", node.NomadNodeID,
-					"error", err)
-			}
-			deleteServerJsonData, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				log.Error("failed to read HCloud delete server action",
-					"server_id", node.RemoteResourceID, "node_id", node.NomadNodeID,
-					"error", err)
-			}
-			var action hcloud.Action
-			err = json.Unmarshal([]byte(deleteServerJsonData), &action)
-			if err != nil {
-				log.Error("failed to parse HCloud delete server action",
-					"server_id", node.RemoteResourceID, "node_id", node.NomadNodeID,
-					"error", err)
-			}
-			if action.Progress < 100 {
-				actionIDs[action.ID] = node
-			} else if action.Status == hcloud.ActionStatusError {
-				failedIDs = append(failedIDs, node)
-			} else if action.Status == hcloud.ActionStatusSuccess {
-				successfulIDs = append(successfulIDs, node)
-			}
+	log := t.logger.With("action", "scale_in", "hcloud_group_id", config[configKeyGroupID])
+	remoteIDs := []string{}
+	for _, server := range servers {
+		if server.Status == hcloud.ServerStatusRunning {
+			remoteIDs = append(remoteIDs, server.Name)
 		}
-		actionIDsKeys := make([]int, 0, len(actionIDs))
-		for actionID := range actionIDs {
-			actionIDsKeys = append(actionIDsKeys, actionID)
-		}
-
-		successfulActions, failedActions, err := t.ensureActionsComplete(ctx, actionIDsKeys)
-		if err != nil {
-			t.logger.Error("failed to wait till all HCloud delete actions are complete", err)
-		}
-
-		for _, successfulAction := range successfulActions {
-			successfulIDs = append(successfulIDs, actionIDs[successfulAction])
-		}
-
-		for _, failedAction := range failedActions {
-			failedIDs = append(failedIDs, actionIDs[failedAction])
-		}
-
-		if len(failedIDs) == 0 {
-			return true, nil
-		} else {
-			nodeResourceIDs = failedIDs
-			failedIDs = []scaleutils.NodeResourceID{}
-		}
-
-		return false, fmt.Errorf("waiting for %v servers to delete", len(servers))
+	}
+	nodes, err := t.clusterUtils.RunPreScaleInTasksWithRemoteCheck(ctx, config, remoteIDs, int(count))
+	if err != nil {
+		return fmt.Errorf("failed to perform pre-scale Nomad scale in tasks: %v", err)
 	}
 
-	err = retry(ctx, defaultRetryInterval, defaultRetryLimit, f)
-
-	var failedTaskErr, successTaskErr error
-
-	if len(failedIDs) > 0 {
-		failedTaskErr = t.clusterUtils.RunPostScaleInTasksOnFailure(failedIDs)
-	}
-
-	if len(successfulIDs) > 0 {
-		successTaskErr = t.clusterUtils.RunPostScaleInTasks(ctx, config, successfulIDs)
-	}
-
-	if successTaskErr != nil {
-		t.logger.Error("failed to perform post-scale Nomad scale in tasks", "error", successTaskErr)
-	}
-
-	if len(failedIDs) > 0 && len(successfulIDs) > 0 {
-		t.logger.Warn("partial scaling success",
-			"success_num", len(successfulIDs), "failed_num", len(failedIDs),
-			"error", failedTaskErr)
-	}
-
-	return err
-}
-
-// validateServers checks that all the instances identified for scaling in
-// belong to the Hetzner nodes.
-func validateServers(servers []*hcloud.Server, ids []scaleutils.NodeResourceID) error {
-
-	// isMissing tracks the total number of instance deemed missing from the
-	// ASG to provide some user context.
-	var isMissing int
-
-	for _, node := range ids {
-
-		// found identifies whether this individual node has been located
-		// within the ASG.
-		var found bool
-
-		// Iterate the instance within the ASG, and exit if we identify a
-		// match to continue below.
+	for _, node := range nodes {
+		var serverInput hcloud.Server
 		for _, server := range servers {
-			if node.RemoteResourceID == server.Name {
-				found = true
+			if server.Name == node.RemoteResourceID {
+				serverInput.ID = server.ID
 				break
 			}
 		}
-
-		if !found {
-			isMissing++
+		_, err := t.hcloud.Server.Delete(ctx, &serverInput)
+		if err != nil {
+			log.Error("failed to delete a HCloud server",
+				"server_id", node.RemoteResourceID, "node_id", node.NomadNodeID,
+				"error", err)
 		}
 	}
 
-	if isMissing > 0 {
-		return fmt.Errorf("%v selected nodes are not found among Hetzner Cloud nodes", isMissing)
+	if err := t.clusterUtils.RunPostScaleInTasks(ctx, config, nodes); err != nil {
+		return fmt.Errorf("failed to perform post-scale Nomad scale in tasks: %v", err)
 	}
-	return nil
+
+	return
 }
 
 func (t *TargetPlugin) getServers(ctx context.Context, labelSelector string) ([]*hcloud.Server, error) {
@@ -411,11 +290,14 @@ func extractLabels(labelsStr string) (map[string]string, error) {
 	labels := make(map[string]string)
 	labelStrs := strings.Split(labelsStr, ",")
 	for _, labelStr := range labelStrs {
+		if labelStr == "" {
+			continue
+		}
 		labelValues := strings.Split(labelStr, "=")
 		if len(labelValues) == 2 {
 			labels[strings.TrimSpace(labelValues[0])] = strings.TrimSpace(labelValues[1])
 		} else {
-			return nil, fmt.Errorf("failed to parse labels: %s", labelsStr)
+			return nil, fmt.Errorf("failed to parse labels %s", labelsStr)
 		}
 	}
 	return labels, nil

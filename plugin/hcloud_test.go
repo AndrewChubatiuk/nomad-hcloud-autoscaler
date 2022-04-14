@@ -4,72 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hashicorp/nomad-autoscaler/sdk/helper/scaleutils"
 	"github.com/hashicorp/nomad/api"
-	"github.com/hetznercloud/hcloud-go/hcloud"
 	"github.com/stretchr/testify/assert"
 )
-
-func Test_validateServers(t *testing.T) {
-	testCases := []struct {
-		inputServers        []*hcloud.Server
-		inputIDs            []scaleutils.NodeResourceID
-		expectedOutputError error
-		name                string
-	}{
-		{
-			inputServers: []*hcloud.Server{
-				{
-					Name: "test-1",
-				},
-				{
-					Name: "test-2",
-				},
-				{
-					Name: "test-3",
-				},
-				{
-					Name: "test-4",
-				},
-			},
-			inputIDs: []scaleutils.NodeResourceID{
-				{RemoteResourceID: "test-1"},
-				{RemoteResourceID: "test-2"},
-			},
-			expectedOutputError: nil,
-			name:                "multiple matches with zero failure",
-		},
-		{
-			inputServers: []*hcloud.Server{
-				{
-					Name: "test-1",
-				},
-				{
-					Name: "test-2",
-				},
-				{
-					Name: "test-3",
-				},
-				{
-					Name: "test-4",
-				},
-			},
-			inputIDs: []scaleutils.NodeResourceID{
-				{RemoteResourceID: "test-1"},
-				{RemoteResourceID: "test-5"},
-			},
-			expectedOutputError: errors.New("1 selected nodes are not found among Hetzner Cloud nodes"),
-			name:                "multiple matches with zero failure",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actualErr := validateServers(tc.inputServers, tc.inputIDs)
-			assert.Equal(t, tc.expectedOutputError, actualErr, tc.name)
-		})
-	}
-}
 
 func Test_hcloudNodeIDMap(t *testing.T) {
 	testCases := []struct {
@@ -108,6 +45,58 @@ func Test_hcloudNodeIDMap(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			actualID, actualErr := hcloudNodeIDMap(tc.inputNode)
 			assert.Equal(t, tc.expectedOutputID, actualID, tc.name)
+			assert.Equal(t, tc.expectedOutputError, actualErr, tc.name)
+		})
+	}
+}
+
+func Test_extractLabels(t *testing.T) {
+	testCases := []struct {
+		selector            string
+		expectedOutput      map[string]string
+		expectedOutputError error
+		name                string
+	}{
+		{
+			selector:            "key1=value1,key2==value2",
+			expectedOutput:      nil,
+			expectedOutputError: errors.New("failed to parse labels key1=value1,key2==value2"),
+			name:                "extra equal sign error",
+		},
+		{
+			selector: ",,key1=value1,,,keyN=valueN,key2=value2,",
+			expectedOutput: map[string]string{
+				"key1": "value1",
+				"keyN": "valueN",
+				"key2": "value2",
+			},
+			expectedOutputError: nil,
+			name:                "trailing comma",
+		},
+		{
+			selector:            "",
+			expectedOutput:      map[string]string{},
+			expectedOutputError: nil,
+			name:                "empty selector",
+		},
+		{
+			selector:            "asdasdasdad",
+			expectedOutput:      nil,
+			expectedOutputError: errors.New("failed to parse labels asdasdasdad"),
+			name:                "key only error",
+		},
+		{
+			selector:            "key1=value1,key2=value2=asdada",
+			expectedOutput:      nil,
+			expectedOutputError: errors.New("failed to parse labels key1=value1,key2=value2=asdada"),
+			name:                "multiple equal signs",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualOutput, actualErr := extractLabels(tc.selector)
+			assert.Equal(t, tc.expectedOutput, actualOutput, tc.name)
 			assert.Equal(t, tc.expectedOutputError, actualErr, tc.name)
 		})
 	}

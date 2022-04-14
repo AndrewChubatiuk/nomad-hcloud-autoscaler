@@ -16,20 +16,22 @@ import (
 
 const (
 	// pluginName is the unique name of the this plugin amongst Target plugins.
-	pluginName = "hcloud-server"
+	pluginName   = "hcloud-server"
+	groupIDLabel = "group-id"
 
 	// configKeys represents the known configuration parameters required at
 	// varying points throughout the plugins lifecycle.
-	configKeyToken      = "hcloud_token"
-	configKeyDatacenter = "hcloud_datacenter"
-	configKeyLocation   = "hcloud_location"
-	configKeyImage      = "hcloud_image"
-	configKeyUserData   = "hcloud_user_data"
-	configKeySSHKeys    = "hcloud_ssh_keys"
-	configKeyLabels     = "hcloud_labels"
-	configKeyServerType = "hcloud_server_type"
-	configKeyNamePrefix = "hcloud_name_prefix"
-	configKeyNetworks   = "hcloud_networks"
+	configKeyToken              = "hcloud_token"
+	configKeyDatacenter         = "hcloud_datacenter"
+	configKeyLocation           = "hcloud_location"
+	configKeyImage              = "hcloud_image"
+	configKeyUserData           = "hcloud_user_data"
+	configKeySSHKeys            = "hcloud_ssh_keys"
+	configKeyLabels             = "hcloud_labels"
+	configKeyServerType         = "hcloud_server_type"
+	configKeyGroupID            = "hcloud_group_id"
+	configKeyNetworks           = "hcloud_networks"
+	configKeyB64UserDataEncoded = "hcloud_b64_user_data_encoded"
 )
 
 var (
@@ -99,22 +101,19 @@ func (t *TargetPlugin) Scale(action sdk.ScalingAction, config map[string]string)
 		return nil
 	}
 
-	namePrefix, ok := config[configKeyNamePrefix]
+	groupID, ok := config[configKeyGroupID]
 	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyNamePrefix)
+		return fmt.Errorf("required config param %s not found", configKeyGroupID)
 	}
 
-	labels, ok := config[configKeyLabels]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyLabels)
-	}
+	labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, groupID)
 	ctx := context.Background()
 
 	// Get Hetzner Cloud servers. This serves to both validate the config value is
 	// correct and ensure the HCloud client is configured correctly. The response
 	// can also be used when performing the scaling, meaning we only need to
 	// call it once.
-	servers, err := t.getServers(ctx, labels)
+	servers, err := t.getServers(ctx, labelSelector)
 	if err != nil {
 		return fmt.Errorf("failed to get HCloud servers: %v", err)
 	}
@@ -130,7 +129,7 @@ func (t *TargetPlugin) Scale(action sdk.ScalingAction, config map[string]string)
 	case "out":
 		err = t.scaleOut(ctx, servers, num, config)
 	default:
-		t.logger.Info("scaling not required", "hcloud_name_prefix", namePrefix,
+		t.logger.Info("scaling not required", "hcloud_name_prefix", groupID,
 			"current_count", len(servers), "strategy_count", action.Count)
 		return nil
 	}
@@ -154,13 +153,15 @@ func (t *TargetPlugin) Status(config map[string]string) (*sdk.TargetStatus, erro
 		return &sdk.TargetStatus{Ready: ready}, nil
 	}
 
-	labels, ok := config[configKeyLabels]
+	groupID, ok := config[configKeyGroupID]
 	if !ok {
-		return nil, fmt.Errorf("required config param %s not found", configKeyLabels)
+		return nil, fmt.Errorf("required config param %s not found", configKeyGroupID)
 	}
+
+	labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, groupID)
 	ctx := context.Background()
 
-	servers, err := t.getServers(ctx, labels)
+	servers, err := t.getServers(ctx, labelSelector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get a list of hetzner servers: %v", err)
 	}

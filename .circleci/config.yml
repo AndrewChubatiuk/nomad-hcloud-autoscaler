@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  docker: circleci/docker@2.0.3
+
 executors:
   go-linux:
     resource_class: medium
@@ -57,20 +60,33 @@ workflows:
     jobs:
       - check-deps-go:
           filters:
-              tags:
-                only: /^v\d+\.\d+\.\d+$/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
       - lint-go:
           filters:
-              tags:
-                only: /^v\d+\.\d+\.\d+$/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
       - linux-build-go:
           filters:
-              tags:
-                only: /^v\d+\.\d+\.\d+$/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
       - linux-test-go:
           filters:
-              tags:
-                only: /^v\d+\.\d+\.\d+$/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+      - docker/publish:
+          attach-at: ./bin/
+          deploy: true
+          image: achubatiuk/nomad-autoscaler
+          tag: $CIRCLE_BRANCH
+          requires:
+            - check-deps-go
+            - lint-go
+            - linux-build-go
+            - linux-test-go
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
       - release:
           requires:
             - check-deps-go

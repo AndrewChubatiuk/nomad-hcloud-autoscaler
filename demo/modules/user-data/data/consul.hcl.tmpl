@@ -1,0 +1,14 @@
+server           = %{ if length(servers) == 0 }true
+bootstrap_expect = 1%{else}false%{ endif }
+data_dir         = "/opt/consul"
+bind_addr        = "{{ GetInterfaceIP \"${interface}\" }}"
+advertise_addr   = "{{ GetInterfaceIP \"${interface}\" }}"
+%{ if length(servers) > 0 }
+start_join       = ["${ join("\",\"", servers) }"]
+%{ endif }
+client_addr      = "{{ GetInterfaceIP \"${interface}\" }}"
+acl = {
+  enabled        = true
+  default_policy = "deny"
+  down_policy    = "extend-cache"
+}
