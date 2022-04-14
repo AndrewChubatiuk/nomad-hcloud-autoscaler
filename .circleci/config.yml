@@ -44,17 +44,6 @@ jobs:
       - run: make test-tools
       - run: make test
 
-  docker-build:
-    executor: docker/docker
-    steps:
-      - checkout
-      - setup_remote_docker
-      - docker/publish:
-          attach-at: ./bin/
-          deploy: true
-          image: achubatiuk/nomad-autoscaler
-          tag: ${CIRCLE_BRANCH}
-
   release:
     docker:
       - image: cibuilds/github:0.10
@@ -85,7 +74,11 @@ workflows:
           filters:
             tags:
               only: /^v\d+\.\d+\.\d+$/
-      - docker-build:
+      - docker/publish:
+          attach-at: ./bin/
+          deploy: true
+          image: achubatiuk/nomad-autoscaler
+          tag: ${CIRCLE_BRANCH}:
           requires:
             - check-deps-go
             - lint-go
