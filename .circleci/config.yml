@@ -78,7 +78,7 @@ workflows:
           attach-at: ./bin/
           deploy: true
           image: achubatiuk/nomad-autoscaler
-          tag: ${CIRCLE_BRANCH}:
+          tag: $CIRCLE_BRANCH
           requires:
             - check-deps-go
             - lint-go
