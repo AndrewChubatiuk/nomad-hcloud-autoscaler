@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,19 +61,36 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		return fmt.Errorf("couldn't retrieve HCloud image: %s", imageName)
 	}
 
-	if _, ok := config[configKeyUserData]; !ok {
+	userData, ok := config[configKeyUserData]
+	if !ok {
 		return fmt.Errorf("required config param %s not found", configKeyUserData)
+	}
+
+	b64UserDataEncoded := false
+	if _, ok := config[configKeyB64UserDataEncoded]; ok {
+		b64UserDataEncoded, err = strconv.ParseBool(config[configKeyB64UserDataEncoded])
+		if err != nil {
+			return fmt.Errorf("failed to parse %s parameter: %v", configKeyB64UserDataEncoded, err)
+		}
 	}
 
 	if _, ok := config[configKeyServerType]; !ok {
 		return fmt.Errorf("required config param %s not found", configKeyServerType)
 	}
 
+	if b64UserDataEncoded {
+		userDataBytes, err := base64.StdEncoding.DecodeString(userData)
+		userData = string(userDataBytes)
+		if err != nil {
+			return fmt.Errorf("failed to perform b64 decode of user data: %v", err)
+		}
+	}
+
 	opts := hcloud.ServerCreateOpts{
 		ServerType: &hcloud.ServerType{
 			Name: config[configKeyServerType],
 		},
-		UserData: config[configKeyUserData],
+		UserData: userData,
 		Image:    image,
 		Location: &hcloud.Location{
 			Name: location,
