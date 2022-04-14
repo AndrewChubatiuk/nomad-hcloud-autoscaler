@@ -152,6 +152,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 			result, _, err := t.hcloud.Server.Create(ctx, opts)
 			if err != nil {
 				log.Error("failed to create an HCloud server", err)
+				break
 			}
 			results = append(results, result)
 			counter++
