@@ -6,6 +6,7 @@ Run `terraform apply` in [demo](demo/setup) folder to create:
     - nomad-autoscaler
     - prometheus
     - redis
+
 Autoscaler scales hcloud nodes for redis. After successful run both Nomad and Consul are wide-world open and credentials for both you can find in terraform output
 
 
