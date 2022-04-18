@@ -16,6 +16,7 @@ module "server_user_data" {
   source = "../modules/user-data"
   input = {
     "node_class"   = "nomad-server"
+    "datacenter"   = "dc1"
     "servers"      = []
     "interface"    = "eth0"
     "consul_token" = ""
@@ -27,6 +28,7 @@ module "redis_client_user_data" {
   source = "../modules/user-data"
   input = {
     "node_class"   = "redis"
+    "datacenter"   = "dc1"
     "servers"      = module.nomad.ipv4_addresses
     "interface"    = "eth0"
     "consul_token" = jsondecode(data.local_file.creds.content)["consul"]

@@ -3,7 +3,13 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
+	ent "github.com/go-playground/validator/v10/translations/en"
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-autoscaler/plugins"
 	"github.com/hashicorp/nomad-autoscaler/plugins/base"
@@ -16,22 +22,7 @@ import (
 
 const (
 	// pluginName is the unique name of the this plugin amongst Target plugins.
-	pluginName   = "hcloud-server"
-	groupIDLabel = "group-id"
-
-	// configKeys represents the known configuration parameters required at
-	// varying points throughout the plugins lifecycle.
-	configKeyToken              = "hcloud_token"
-	configKeyDatacenter         = "hcloud_datacenter"
-	configKeyLocation           = "hcloud_location"
-	configKeyImage              = "hcloud_image"
-	configKeyUserData           = "hcloud_user_data"
-	configKeySSHKeys            = "hcloud_ssh_keys"
-	configKeyLabels             = "hcloud_labels"
-	configKeyServerType         = "hcloud_server_type"
-	configKeyGroupID            = "hcloud_group_id"
-	configKeyNetworks           = "hcloud_networks"
-	configKeyB64UserDataEncoded = "hcloud_b64_user_data_encoded"
+	pluginName = "hcloud-server"
 )
 
 var (
@@ -43,6 +34,10 @@ var (
 		Name:       pluginName,
 		PluginType: sdk.PluginTypeTarget,
 	}
+
+	validate = validator.New()
+	eng      = en.New()
+	uni      = ut.New(eng, eng)
 )
 
 // Assert that TargetPlugin meets the target.Target interface.
@@ -50,7 +45,7 @@ var _ target.Target = (*TargetPlugin)(nil)
 
 // TargetPlugin is the Hetzner Cloud Server implementation of the target.Target interface.
 type TargetPlugin struct {
-	config map[string]string
+	config *HCloudPluginConfig
 	logger hclog.Logger
 	hcloud *hcloud.Client
 
@@ -70,11 +65,36 @@ func NewHCloudServerPlugin(log hclog.Logger) *TargetPlugin {
 // SetConfig satisfies the SetConfig function on the base.Base interface.
 func (t *TargetPlugin) SetConfig(config map[string]string) error {
 
-	t.config = config
+	trans, _ := uni.GetTranslator("en")
+	ent.RegisterDefaultTranslations(validate, trans)
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
 
-	if err := t.setupHCloudClient(config); err != nil {
-		return err
+	validate.RegisterTranslation("required", trans, func(ut ut.Translator) error {
+		return ut.Add("required", "{0} value is not set in a {1} config", true)
+	}, func(ut ut.Translator, fe validator.FieldError) string {
+		var configTypeName string
+		fmt.Println(fe.Namespace())
+		if strings.HasPrefix(fe.Namespace(), "HCloudTargetConfig") {
+			configTypeName = "target"
+		} else if strings.HasPrefix(fe.Namespace(), "HCloudPluginConfig") {
+			configTypeName = "plugin"
+		}
+		t, _ := ut.T("required", fe.Field(), configTypeName)
+
+		return t
+	})
+
+	if err := Parse(config, &t.config); err != nil {
+		return fmt.Errorf("failed to parse HCloud target config: %v", err)
 	}
+
+	t.setupHCloudClient()
 
 	clusterUtils, err := scaleutils.NewClusterScaleUtils(nomad.ConfigFromNamespacedMap(config), t.logger)
 	if err != nil {
@@ -83,7 +103,7 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 
 	// Store and set the remote ID callback function.
 	t.clusterUtils = clusterUtils
-	t.clusterUtils.ClusterNodeIDLookupFunc = hcloudNodeIDMap
+	t.clusterUtils.ClusterNodeIDLookupFunc = t.hcloudNodeIDMap
 
 	return nil
 }
@@ -101,19 +121,18 @@ func (t *TargetPlugin) Scale(action sdk.ScalingAction, config map[string]string)
 		return nil
 	}
 
-	groupID, ok := config[configKeyGroupID]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyGroupID)
-	}
-
-	labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, groupID)
 	ctx := context.Background()
 
 	// Get Hetzner Cloud servers. This serves to both validate the config value is
 	// correct and ensure the HCloud client is configured correctly. The response
 	// can also be used when performing the scaling, meaning we only need to
 	// call it once.
-	servers, err := t.getServers(ctx, labelSelector)
+	var targetConfig HCloudTargetConfig
+	if err := Parse(config, &targetConfig); err != nil {
+		return fmt.Errorf("failed to parse HCloud target config: %v", err)
+	}
+
+	servers, err := t.getServers(ctx, &targetConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get HCloud servers: %v", err)
 	}
@@ -125,11 +144,11 @@ func (t *TargetPlugin) Scale(action sdk.ScalingAction, config map[string]string)
 
 	switch direction {
 	case "in":
-		err = t.scaleIn(ctx, servers, num, config)
+		err = t.scaleIn(ctx, servers, num, config, &targetConfig)
 	case "out":
-		err = t.scaleOut(ctx, servers, num, config)
+		err = t.scaleOut(ctx, servers, num, config, &targetConfig)
 	default:
-		t.logger.Info("scaling not required", "hcloud_name_prefix", groupID,
+		t.logger.Info("scaling not required", "hcloud_name_prefix", targetConfig.GroupID,
 			"current_count", len(servers), "strategy_count", action.Count)
 		return nil
 	}
@@ -153,15 +172,14 @@ func (t *TargetPlugin) Status(config map[string]string) (*sdk.TargetStatus, erro
 		return &sdk.TargetStatus{Ready: ready}, nil
 	}
 
-	groupID, ok := config[configKeyGroupID]
-	if !ok {
-		return nil, fmt.Errorf("required config param %s not found", configKeyGroupID)
+	var targetConfig HCloudTargetConfig
+	if err := Parse(config, &targetConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse HCloud target config: %v", err)
 	}
 
-	labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, groupID)
 	ctx := context.Background()
 
-	servers, err := t.getServers(ctx, labelSelector)
+	servers, err := t.getServers(ctx, &targetConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get a list of hetzner servers: %v", err)
 	}

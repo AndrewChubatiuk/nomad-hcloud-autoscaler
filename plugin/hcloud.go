@@ -4,81 +4,28 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/nomad/api"
 	"github.com/hetznercloud/hcloud-go/hcloud"
 )
 
-const (
-	defaultRetryInterval   = 60 * time.Second
-	defaultRetryLimit      = 5
-	defaultPerPage         = 50
-	defaultRandomSuffixLen = 10
-	nodeAttrHCloudServerID = "unique.hostname"
-)
-
 // setupHCloudClient takes the passed config mapping and instantiates the
 // required Hetzner Cloud client.
-func (t *TargetPlugin) setupHCloudClient(config map[string]string) error {
-
-	token, ok := config[configKeyToken]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyToken)
-	}
-
-	t.hcloud = hcloud.NewClient(hcloud.WithToken(token))
-	return nil
+func (t *TargetPlugin) setupHCloudClient() {
+	t.hcloud = hcloud.NewClient(hcloud.WithToken(t.config.Token))
 }
 
 // scaleOut adds HCloud servers up to desired count to match what the
 // Autoscaler has deemed required.
-func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string) error {
+func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *HCloudTargetConfig) error {
 	// Create a logger for this action to pre-populate useful information we
 	// would like on all log lines.
-	log := t.logger.With("action", "scale_out", "hcloud_group_id", config[configKeyGroupID],
+	log := t.logger.With("action", "scale_out", "hcloud_group_id", targetConfig.GroupID,
 		"desired_count", count)
 
-	location, ok := config[configKeyLocation]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyLocation)
-	}
+	userData := targetConfig.UserData
 
-	imageName, ok := config[configKeyImage]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyImage)
-	}
-
-	image, _, err := t.hcloud.Image.Get(ctx, imageName)
-	if err != nil {
-		return fmt.Errorf("couldn't retrieve HCloud image: %v", err)
-	}
-
-	if image == nil {
-		return fmt.Errorf("couldn't retrieve HCloud image: %s", imageName)
-	}
-
-	userData, ok := config[configKeyUserData]
-	if !ok {
-		return fmt.Errorf("required config param %s not found", configKeyUserData)
-	}
-
-	b64UserDataEncoded := false
-	if _, ok := config[configKeyB64UserDataEncoded]; ok {
-		b64UserDataEncoded, err = strconv.ParseBool(config[configKeyB64UserDataEncoded])
-		if err != nil {
-			return fmt.Errorf("failed to parse %s parameter: %v", configKeyB64UserDataEncoded, err)
-		}
-	}
-
-	if _, ok := config[configKeyServerType]; !ok {
-		return fmt.Errorf("required config param %s not found", configKeyServerType)
-	}
-
-	if b64UserDataEncoded {
+	if targetConfig.B64UserDataEncoded {
 		userDataBytes, err := base64.StdEncoding.DecodeString(userData)
 		userData = string(userDataBytes)
 		if err != nil {
@@ -87,68 +34,26 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 	}
 
 	opts := hcloud.ServerCreateOpts{
-		ServerType: &hcloud.ServerType{
-			Name: config[configKeyServerType],
-		},
-		UserData: userData,
-		Image:    image,
-		Location: &hcloud.Location{
-			Name: location,
-		},
+		UserData:       userData,
+		Image:          targetConfig.Image,
+		Datacenter:     targetConfig.Datacenter,
+		Location:       targetConfig.Location,
+		ServerType:     targetConfig.ServerType,
+		PlacementGroup: targetConfig.PlacementGroup,
+		Firewalls:      targetConfig.Firewalls,
+		SSHKeys:        targetConfig.SSHKeys,
+		Labels:         targetConfig.Labels,
+		Networks:       targetConfig.Networks,
 	}
 
-	if datacenter, ok := config[configKeyDatacenter]; ok {
-		opts.Datacenter = &hcloud.Datacenter{Name: datacenter}
-	}
-
-	if sshKeys, ok := config[configKeySSHKeys]; !ok {
-		return fmt.Errorf("required config param %s not found", configKeySSHKeys)
-	} else {
-		for _, sshKeyValue := range strings.Split(sshKeys, ",") {
-			sshKey, _, err := t.hcloud.SSHKey.Get(ctx, sshKeyValue)
-			if err != nil {
-				return fmt.Errorf("failed to get HCloud SSH key: %v", err)
-			}
-			if sshKey == nil {
-				return fmt.Errorf("HCloud SSH key not found: %s", sshKeyValue)
-			}
-			opts.SSHKeys = append(opts.SSHKeys, sshKey)
-		}
-	}
-
-	labels := make(map[string]string)
-
-	if labelSelector, ok := config[configKeyLabels]; ok {
-		labels, err = extractLabels(labelSelector)
-		if err != nil {
-			return fmt.Errorf("failed to parse labels: %v", err)
-		}
-	}
-
-	labels[groupIDLabel] = config[configKeyGroupID]
-	opts.Labels = labels
-
-	if networks, ok := config[configKeyNetworks]; ok {
-		for _, networkValue := range strings.Split(networks, ",") {
-			network, _, err := t.hcloud.Network.Get(ctx, networkValue)
-			if err != nil {
-				return fmt.Errorf("failed to get HCloud Network: %v", err)
-			}
-			if network == nil {
-				return fmt.Errorf("HCloud network not found: %s", networkValue)
-			}
-			opts.Networks = append(opts.Networks, network)
-		}
-	}
+	opts.Labels[t.config.GroupIDLabelSelector] = targetConfig.GroupID
 
 	f := func(ctx context.Context) (bool, error) {
 		var results []hcloud.ServerCreateResult
 		countDiff := count - int64(len(servers))
 		var counter int64
 		for counter < countDiff {
-			id := uuid.New()
-			suffix := strings.Replace(id.String(), "-", "", -1)[:defaultRandomSuffixLen]
-			opts.Name = fmt.Sprintf("%s-%s", config[configKeyGroupID], suffix)
+			opts.Name = targetConfig.RandomName(t.config.RandomSuffixLen)
 			result, _, err := t.hcloud.Server.Create(ctx, opts)
 			if err != nil {
 				log.Error("failed to create an HCloud server", err)
@@ -167,8 +72,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		if err != nil {
 			log.Error("failed to wait till all HCloud create actions are ready", err)
 		}
-		labelSelector := fmt.Sprintf("%s=%s", groupIDLabel, config[configKeyGroupID])
-		servers, err = t.getServers(ctx, labelSelector)
+		servers, err = t.getServers(ctx, targetConfig)
 		if err != nil {
 			return false, fmt.Errorf("failed to get a new servers count during instance scale out: %v", err)
 		}
@@ -179,13 +83,13 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		return false, fmt.Errorf("waiting for %v servers to create", count-serverCount)
 	}
 
-	return retry(ctx, defaultRetryInterval, defaultRetryLimit, f)
+	return retry(ctx, t.config.RetryInterval, t.config.RetryLimit, f)
 }
 
-func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string) (err error) {
+func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *HCloudTargetConfig) (err error) {
 	// Create a logger for this action to pre-populate useful information we
 	// would like on all log lines.
-	log := t.logger.With("action", "scale_in", "hcloud_group_id", config[configKeyGroupID])
+	log := t.logger.With("action", "scale_in", "hcloud_group_id", targetConfig.GroupID)
 	remoteIDs := []string{}
 	for _, server := range servers {
 		if server.Status == hcloud.ServerStatusRunning {
@@ -220,11 +124,11 @@ func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, co
 	return
 }
 
-func (t *TargetPlugin) getServers(ctx context.Context, labelSelector string) ([]*hcloud.Server, error) {
+func (t *TargetPlugin) getServers(ctx context.Context, targetConfig *HCloudTargetConfig) ([]*hcloud.Server, error) {
 	opts := hcloud.ServerListOpts{
 		ListOpts: hcloud.ListOpts{
-			LabelSelector: labelSelector,
-			PerPage:       defaultPerPage,
+			LabelSelector: targetConfig.GetSelector(t.config.GroupIDLabelSelector),
+			PerPage:       t.config.ItemsPerPage,
 		},
 		Status: []hcloud.ServerStatus{hcloud.ServerStatusRunning},
 	}
@@ -272,33 +176,16 @@ func (t *TargetPlugin) ensureActionsComplete(ctx context.Context, ids []int) (su
 		return false, fmt.Errorf("waiting for %v actions to finish", len(ids))
 	}
 
-	err = retry(ctx, defaultRetryInterval, defaultRetryLimit, f)
+	err = retry(ctx, t.config.RetryInterval, t.config.RetryLimit, f)
 	return
 }
 
 // hcloudNodeIDMap is used to identify the HCloud Server of a Nomad node using
 // the relevant attribute value.
-func hcloudNodeIDMap(n *api.Node) (string, error) {
-	val, ok := n.Attributes[nodeAttrHCloudServerID]
+func (t *TargetPlugin) hcloudNodeIDMap(n *api.Node) (string, error) {
+	val, ok := n.Attributes[t.config.NodeAttrID]
 	if !ok || val == "" {
-		return "", fmt.Errorf("attribute %q not found", nodeAttrHCloudServerID)
+		return "", fmt.Errorf("attribute %q not found", t.config.NodeAttrID)
 	}
 	return val, nil
-}
-
-func extractLabels(labelsStr string) (map[string]string, error) {
-	labels := make(map[string]string)
-	labelStrs := strings.Split(labelsStr, ",")
-	for _, labelStr := range labelStrs {
-		if labelStr == "" {
-			continue
-		}
-		labelValues := strings.Split(labelStr, "=")
-		if len(labelValues) == 2 {
-			labels[strings.TrimSpace(labelValues[0])] = strings.TrimSpace(labelValues[1])
-		} else {
-			return nil, fmt.Errorf("failed to parse labels %s", labelsStr)
-		}
-	}
-	return labels, nil
 }
