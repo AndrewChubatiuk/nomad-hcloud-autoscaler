@@ -66,7 +66,9 @@ func NewHCloudServerPlugin(log hclog.Logger) *TargetPlugin {
 func (t *TargetPlugin) SetConfig(config map[string]string) error {
 
 	trans, _ := uni.GetTranslator("en")
-	ent.RegisterDefaultTranslations(validate, trans)
+	if err := ent.RegisterDefaultTranslations(validate, trans); err != nil {
+		return err
+	}
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		name := strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
 		if name == "-" {
@@ -75,7 +77,7 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		return name
 	})
 
-	validate.RegisterTranslation("required", trans, func(ut ut.Translator) error {
+	err := validate.RegisterTranslation("required", trans, func(ut ut.Translator) error {
 		return ut.Add("required", "{0} value is not set in a {1} config", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		var configTypeName string
@@ -89,6 +91,10 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 
 		return t
 	})
+
+	if err != nil {
+		return err
+	}
 
 	if err := Parse(config, &t.config); err != nil {
 		return fmt.Errorf("failed to parse HCloud target config: %v", err)

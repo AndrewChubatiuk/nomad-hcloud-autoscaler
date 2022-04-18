@@ -133,7 +133,9 @@ func (tc *HCloudTargetConfig) RandomName(suffixLen int) string {
 
 func Parse(input interface{}, output interface{}) error {
 
-	defaults.Set(output)
+	if err := defaults.Set(output); err != nil {
+		return err
+	}
 
 	config := &mapstructure.DecoderConfig{
 		Metadata:         nil,
