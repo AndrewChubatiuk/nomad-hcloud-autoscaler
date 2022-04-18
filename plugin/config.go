@@ -90,7 +90,7 @@ func decodeFunc(
 
 type HCloudPluginConfig struct {
 	Token                string        `mapstructure:"hcloud_token" validate:"required"`
-	RandomSuffixLen      int           `mapstructure:"hcloud_random_suffix_len" default:"true"`
+	RandomSuffixLen      int           `mapstructure:"hcloud_random_suffix_len" default:"10"`
 	RetryInterval        time.Duration `mapstructure:"hcloud_retry_interval" default:"60s"`
 	RetryLimit           int           `mapstructure:"hcloud_retry_limit" default:"5"`
 	ItemsPerPage         int           `mapstructure:"hcloud_items_per_page" default:"50"`
