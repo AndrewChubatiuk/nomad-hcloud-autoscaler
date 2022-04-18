@@ -54,7 +54,6 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		var counter int64
 		for counter < countDiff {
 			opts.Name = targetConfig.RandomName(t.config.RandomSuffixLen)
-			log.Info("Creating server with name", opts.Name)
 			result, _, err := t.hcloud.Server.Create(ctx, opts)
 			if err != nil {
 				log.Error("failed to create an HCloud server", err)
