@@ -14,7 +14,7 @@ job "autoscaler" {
       driver = "docker"
 
       config {
-        image      = "achubatiuk/nomad-autoscaler:fix-scaler"
+        image      = "achubatiuk/nomad-autoscaler:main"
         command    = "nomad-autoscaler"
         args       = ["agent", "-config", "${NOMAD_TASK_DIR}/config.hcl", "-plugin-dir", "/plugins"]
         force_pull = true

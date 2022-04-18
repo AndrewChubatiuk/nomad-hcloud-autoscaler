@@ -96,8 +96,8 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		return err
 	}
 
-	if err := Parse(config, &t.config); err != nil {
-		return fmt.Errorf("failed to parse HCloud target config: %v", err)
+	if err := Parse(config, t.config); err != nil {
+		return fmt.Errorf("failed to parse HCloud plugin config: %v", err)
 	}
 
 	t.setupHCloudClient()
