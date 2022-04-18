@@ -14,7 +14,7 @@ job "autoscaler" {
       driver = "docker"
 
       config {
-        image      = "achubatiuk/nomad-autoscaler:fix-scaler"
+        image      = "achubatiuk/nomad-autoscaler:main"
         command    = "nomad-autoscaler"
         args       = ["agent", "-config", "${NOMAD_TASK_DIR}/config.hcl", "-plugin-dir", "/plugins"]
         force_pull = true
@@ -40,12 +40,11 @@ scaling  "cluster_class-batch" {
 
     target "hcloud-server" {
       node_class                   = "redis"
-      hcloud_location              = "fsn1"
-      hcloud_image                 = "ubuntu-20.04"
+      datacenter                   = "dc1"
       hcloud_ssh_keys              = "nomad"
-      hcloud_server_type           = "cx11"
       hcloud_group_id              = "redis"
       hcloud_labels                = "key1=value1"
+      hcloud_location              = "fsn1"
       hcloud_user_data             = "{{ key "secrets/nomad/redis/user-data" }}"
       hcloud_b64_user_data_encoded = "true"
     }

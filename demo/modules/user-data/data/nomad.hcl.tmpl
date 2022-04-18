@@ -1,6 +1,9 @@
 region    = "global"
 log_level = "INFO"
 data_dir  =  "/opt/nomad"
+%{ if datacenter != "" }
+datacenter = "${datacenter}"
+%{ endif }
 bind_addr = "0.0.0.0"
 server = {
   enabled          = %{ if length(servers) == 0 }true%{else}false%{ endif }
