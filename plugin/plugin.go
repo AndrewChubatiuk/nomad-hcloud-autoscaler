@@ -45,7 +45,7 @@ var _ target.Target = (*TargetPlugin)(nil)
 
 // TargetPlugin is the Hetzner Cloud Server implementation of the target.Target interface.
 type TargetPlugin struct {
-	config *HCloudPluginConfig
+	config HCloudPluginConfig
 	logger hclog.Logger
 	hcloud *hcloud.Client
 
@@ -96,7 +96,7 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		return err
 	}
 
-	if err := Parse(config, t.config); err != nil {
+	if err := Parse(config, &t.config); err != nil {
 		return fmt.Errorf("failed to parse HCloud plugin config: %v", err)
 	}
 
