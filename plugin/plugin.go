@@ -45,7 +45,7 @@ var _ target.Target = (*TargetPlugin)(nil)
 
 // TargetPlugin is the Hetzner Cloud Server implementation of the target.Target interface.
 type TargetPlugin struct {
-	config HCloudPluginConfig
+	config hcloudPluginConfig
 	logger hclog.Logger
 	hcloud *hcloud.Client
 
@@ -82,9 +82,9 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		var configTypeName string
 		fmt.Println(fe.Namespace())
-		if strings.HasPrefix(fe.Namespace(), "HCloudTargetConfig") {
+		if strings.HasPrefix(fe.Namespace(), "hcloudTargetConfig") {
 			configTypeName = "target"
-		} else if strings.HasPrefix(fe.Namespace(), "HCloudPluginConfig") {
+		} else if strings.HasPrefix(fe.Namespace(), "hcloudPluginConfig") {
 			configTypeName = "plugin"
 		}
 		t, _ := ut.T("required", fe.Field(), configTypeName)
@@ -96,11 +96,11 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		return err
 	}
 
-	if err := Parse(config, &t.config); err != nil {
+	t.setupHCloudClient()
+
+	if err := parse(t.client(), config, &t.config); err != nil {
 		return fmt.Errorf("failed to parse HCloud plugin config: %v", err)
 	}
-
-	t.setupHCloudClient()
 
 	clusterUtils, err := scaleutils.NewClusterScaleUtils(nomad.ConfigFromNamespacedMap(config), t.logger)
 	if err != nil {
@@ -133,8 +133,8 @@ func (t *TargetPlugin) Scale(action sdk.ScalingAction, config map[string]string)
 	// correct and ensure the HCloud client is configured correctly. The response
 	// can also be used when performing the scaling, meaning we only need to
 	// call it once.
-	var targetConfig HCloudTargetConfig
-	if err := Parse(config, &targetConfig); err != nil {
+	var targetConfig hcloudTargetConfig
+	if err := parse(t.client(), config, &targetConfig); err != nil {
 		return fmt.Errorf("failed to parse HCloud target config: %v", err)
 	}
 
@@ -178,8 +178,8 @@ func (t *TargetPlugin) Status(config map[string]string) (*sdk.TargetStatus, erro
 		return &sdk.TargetStatus{Ready: ready}, nil
 	}
 
-	var targetConfig HCloudTargetConfig
-	if err := Parse(config, &targetConfig); err != nil {
+	var targetConfig hcloudTargetConfig
+	if err := parse(t.client(), config, &targetConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse HCloud target config: %v", err)
 	}
 
