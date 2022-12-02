@@ -7,10 +7,11 @@ executors:
   go-linux:
     resource_class: medium
     docker:
-      - image: docker.mirror.hashicorp.services/golang:1.17.4
+      - image: docker.mirror.hashicorp.services/golang:1.19.2
     shell: /usr/bin/env bash -euo pipefail -c
     environment:
       GO111MODULE: "on"
+      HCLOUD_ENDPOINT: http://localhost:3000/v1
     working_directory: /go/src/github.com/AndrewChubatiuk/nomad-hcloud-autoscaler
 
 jobs:
@@ -39,6 +40,10 @@ jobs:
 
   linux-test-go:
     executor: go-linux
+    docker:
+      - image: docker.mirror.hashicorp.services/golang:1.19.2
+      - image: mockoon/cli:latest
+        command: -d https://raw.githubusercontent.com/mockoon/mock-samples/main/mock-apis/data/hetznercloud.json --port 3000
     steps:
       - checkout
       - run: make test-tools

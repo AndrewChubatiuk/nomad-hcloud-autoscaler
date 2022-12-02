@@ -15,9 +15,13 @@ func (t *TargetPlugin) setupHCloudClient() {
 	t.hcloud = hcloud.NewClient(hcloud.WithToken(t.config.Token))
 }
 
+func (t *TargetPlugin) client() *hcloud.Client {
+	return t.hcloud
+}
+
 // scaleOut adds HCloud servers up to desired count to match what the
 // Autoscaler has deemed required.
-func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *HCloudTargetConfig) error {
+func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *hcloudTargetConfig) error {
 	// Create a logger for this action to pre-populate useful information we
 	// would like on all log lines.
 	log := t.logger.With("action", "scale_out", "hcloud_group_id", targetConfig.GroupID,
@@ -44,6 +48,10 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		SSHKeys:        targetConfig.SSHKeys,
 		Labels:         targetConfig.Labels,
 		Networks:       targetConfig.Networks,
+		PublicNet: &hcloud.ServerCreatePublicNet{
+			EnableIPv4: targetConfig.PublicNetEnableIPv4,
+			EnableIPv6: targetConfig.PublicNetEnableIPv6,
+		},
 	}
 
 	opts.Labels[t.config.GroupIDLabelSelector] = targetConfig.GroupID
@@ -53,7 +61,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 		countDiff := count - int64(len(servers))
 		var counter int64
 		for counter < countDiff {
-			opts.Name = targetConfig.RandomName(t.config.RandomSuffixLen)
+			opts.Name = targetConfig.randomName(t.config.RandomSuffixLen)
 			result, _, err := t.hcloud.Server.Create(ctx, opts)
 			if err != nil {
 				log.Error("failed to create an HCloud server", err)
@@ -86,7 +94,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 	return retry(ctx, t.config.RetryInterval, t.config.RetryLimit, f)
 }
 
-func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *HCloudTargetConfig) (err error) {
+func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *hcloudTargetConfig) (err error) {
 	// Create a logger for this action to pre-populate useful information we
 	// would like on all log lines.
 	log := t.logger.With("action", "scale_in", "hcloud_group_id", targetConfig.GroupID)
@@ -124,10 +132,10 @@ func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, co
 	return
 }
 
-func (t *TargetPlugin) getServers(ctx context.Context, targetConfig *HCloudTargetConfig) ([]*hcloud.Server, error) {
+func (t *TargetPlugin) getServers(ctx context.Context, targetConfig *hcloudTargetConfig) ([]*hcloud.Server, error) {
 	opts := hcloud.ServerListOpts{
 		ListOpts: hcloud.ListOpts{
-			LabelSelector: targetConfig.GetSelector(t.config.GroupIDLabelSelector),
+			LabelSelector: targetConfig.getSelector(t.config.GroupIDLabelSelector),
 			PerPage:       t.config.ItemsPerPage,
 		},
 		Status: []hcloud.ServerStatus{hcloud.ServerStatusRunning},
