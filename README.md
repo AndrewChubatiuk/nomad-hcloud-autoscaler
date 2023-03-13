@@ -86,6 +86,10 @@ check "hashistack-allocated-cpu" {
 
 - `hcloud_networks` `(string: "")` - [Network][hcloud_networks] IDs which should be attached to the server private network interface at the creation time.
 
+- `hcloud_public_net_enable_ipv4` `(bool: "true")` - Enable IPV4 address for HCloud instances
+
+- `hcloud_public_net_enable_ipv6` `(bool: "false")` - Enable IPV6 address for HCloud instances
+
 - `datacenter` `(string: "")` - The Nomad client [datacenter][nomad_datacenter] identifier used to group nodes into a pool of resource.
 
 - `node_class` `(string: "")` - The Nomad [client node class][nomad_node_class] identifier used to group nodes into a pool of resource.
@@ -120,4 +124,4 @@ Run `terraform apply` in [demo](demo/setup) folder to create:
     - prometheus
     - redis
 
-Autoscaler scales hcloud nodes for redis. After successful run both Nomad and Consul are wide-world open and credentials for both you can find in terraform output
+Autoscaler scales hcloud nodes for redis. After successful run both Nomad and Consul are wide-world open and credentials for both you can find in terraform output and in [creds.json file](demo/setup/creds.json)

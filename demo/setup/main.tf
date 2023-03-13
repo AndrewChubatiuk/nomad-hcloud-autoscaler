@@ -3,7 +3,6 @@ module "nomad" {
   prefix       = "nomad-server"
   location     = "fsn1"
   server_count = 1
-  ssh_keys     = ["nomad"]
   user_data    = module.server_user_data.data
   labels = {
     Environment = "demo"
@@ -31,9 +30,15 @@ module "redis_client_user_data" {
     "datacenter"   = "dc1"
     "servers"      = module.nomad.ipv4_addresses
     "interface"    = "eth0"
-    "consul_token" = jsondecode(data.local_file.creds.content)["consul"]
-    "nomad_token"  = jsondecode(data.local_file.creds.content)["nomad"]
+    "consul_token" = jsondecode(data.local_sensitive_file.creds.content)["consul"]
+    "nomad_token"  = jsondecode(data.local_sensitive_file.creds.content)["nomad"]
   }
+}
+
+resource "local_sensitive_file" "ssh" {
+  content         = module.nomad.private_key
+  filename        = "${path.module}/nomad.pem"
+  file_permission = "0400"
 }
 
 resource "null_resource" "nomad" {
@@ -45,7 +50,7 @@ resource "null_resource" "nomad" {
   connection {
     host        = module.nomad.ipv4_addresses[0]
     user        = "root"
-    private_key = file(var.ssh_key)
+    private_key = module.nomad.private_key
   }
 
   provisioner "file" {
@@ -68,11 +73,11 @@ resource "null_resource" "nomad" {
   }
 
   provisioner "local-exec" {
-    command = "scp -i ${var.ssh_key} root@${module.nomad.ipv4_addresses[0]}:/tmp/creds.json ${path.root}/creds.json"
+    command = "scp -o \"StrictHostKeyChecking no\" -i ${local_sensitive_file.ssh.filename} root@${module.nomad.ipv4_addresses[0]}:/tmp/creds.json ${path.root}/creds.json"
   }
 }
 
-data "local_file" "creds" {
+data "local_sensitive_file" "creds" {
   filename   = "${path.root}/creds.json"
   depends_on = [null_resource.nomad]
 }
@@ -83,8 +88,8 @@ resource "consul_key_prefix" "secrets" {
   subkeys = {
     "nomad/redis/user-data" = base64encode(module.redis_client_user_data.data)
     "hcloud/token"          = var.hcloud_token
-    "consul/token"          = jsondecode(data.local_file.creds.content)["consul"]
-    "nomad/token"           = jsondecode(data.local_file.creds.content)["nomad"]
+    "consul/token"          = jsondecode(data.local_sensitive_file.creds.content)["consul"]
+    "nomad/token"           = jsondecode(data.local_sensitive_file.creds.content)["nomad"]
   }
 }
 
