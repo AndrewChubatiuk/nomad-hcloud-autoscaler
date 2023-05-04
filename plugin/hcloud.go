@@ -117,7 +117,7 @@ func (t *TargetPlugin) scaleIn(ctx context.Context, servers []*hcloud.Server, co
 				break
 			}
 		}
-		_, err := t.hcloud.Server.Delete(ctx, &serverInput)
+		_, _, err := t.hcloud.Server.DeleteWithResult(ctx, &serverInput)
 		if err != nil {
 			log.Error("failed to delete a HCloud server",
 				"server_id", node.RemoteResourceID, "node_id", node.NomadNodeID,
