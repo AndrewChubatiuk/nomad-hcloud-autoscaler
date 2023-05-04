@@ -21,8 +21,8 @@ test-tools: ## Install the tools used to run tests
 .PHONY: lint-tools
 lint-tools: ## Install the tools used to lint
 	@echo "==> Installing lint tools..."
-	GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1
-	GO111MODULE=on go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
+	GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2
+	GO111MODULE=on go install honnef.co/go/tools/cmd/staticcheck@v0.4.3
 	GO111MODULE=on go install github.com/hashicorp/go-hclog/hclogvet@latest
 	@echo "==> Done"
 
