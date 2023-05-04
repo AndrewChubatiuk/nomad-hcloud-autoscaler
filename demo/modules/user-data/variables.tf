@@ -3,12 +3,12 @@ locals {
     apt = {
       sources = {
         "hashicorp-releases.list" = {
-          keyid  = "9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
-          source = "deb [arch=amd64] https://apt.releases.hashicorp.com $RELEASE main"
+          keyid  = "798A EC65 4E5C 1542 8C8E 42EE AA16 FCBC A621 E701"
+          source = "deb [signed-by=$KEY_FILE] https://apt.releases.hashicorp.com $RELEASE main"
         }
         "docker.list" = {
-          keyid  = "E8A032E094D8EB4EA189D270DA418C88A3219F7B"
-          source = "deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable"
+          keyid  = "9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88"
+          source = "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable"
         }
       }
     }

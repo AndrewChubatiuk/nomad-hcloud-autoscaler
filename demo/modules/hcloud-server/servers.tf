@@ -20,9 +20,15 @@ resource "hcloud_server" "server" {
   count       = var.server_count
   name        = "${var.prefix}-${count.index}"
   image       = var.image
-  datacenter  = random_shuffle.dc[count.index].result[0]
+  datacenter  = join("", random_shuffle.dc[count.index].result)
   ssh_keys    = [hcloud_ssh_key.server.id]
   server_type = var.server_type
   user_data   = var.user_data
   labels      = merge(var.labels, { "Name" = var.prefix })
+}
+
+resource "hcloud_server_network" "server" {
+  count      = var.server_count
+  server_id  = hcloud_server.server[count.index].id
+  network_id = var.network_id
 }

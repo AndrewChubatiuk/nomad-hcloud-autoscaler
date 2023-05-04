@@ -5,5 +5,7 @@ bin/*
 *.tfstate.*.backup
 *.tfplan
 **/.terraform/*
-creds.json
+demo/setup/creds/*
+nomad.pem
+api-tokens.json
 .vscode

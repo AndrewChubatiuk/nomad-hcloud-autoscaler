@@ -20,6 +20,11 @@ variable "image" {
   default = "ubuntu-20.04"
 }
 
+variable "network_id" {}
+
 locals {
-  locations = [for dc in data.hcloud_datacenters.dc.names : dc if var.location != null && can(regex("^${var.location}-dc\\d+$", dc))]
+  locations = [
+    for dc in data.hcloud_datacenters.dc.datacenters : dc
+    if var.location != null && can(regex("^${var.location}-dc\\d+$", dc))
+  ]
 }

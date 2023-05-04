@@ -3,7 +3,9 @@ set -e
 
 systemctl restart consul
 
-export CONSUL_HTTP_ADDR=http://$(ip -o -4 addr list ${interface} | head -n1 | awk '{print $4}' | cut -d/ -f1):8500
+export SERVER=$(ip -o -4 addr list ${interface} | head -n1 | awk '{print $4}' | cut -d/ -f1)
+
+export CONSUL_HTTP_ADDR=http://$SERVER:8500
 until [[ $(curl -s -f $CONSUL_HTTP_ADDR/v1/status/leader) =~ \"[0-9.]+:8300\" ]] ; do
   echo "Waiting for consul to become available..."
   sleep 5
@@ -19,7 +21,7 @@ echo "CONSUL_HTTP_TOKEN=$CONSUL_HTTP_TOKEN" >> /etc/consul.d/consul.env
 
 systemctl restart nomad
 
-export NOMAD_ADDR=http://$(ip -o -4 addr list ${interface} | head -n1 | awk '{print $4}' | cut -d/ -f1):4646
+export NOMAD_ADDR=http://$SERVER:4646
 until [[ $(curl -s -f $NOMAD_ADDR/v1/status/leader) =~ \"[0-9.]+:4647\" ]] ; do
   echo "Waiting for nomad to become available..."
   sleep 5
@@ -34,7 +36,7 @@ echo "NOMAD_TOKEN=$NOMAD_TOKEN" >> /etc/consul.d/consul.env
 
 systemctl enable consul nomad
 
-cat > /tmp/creds.json <<EOL
+cat > /tmp/api-tokens.json <<EOL
 {
     "nomad": "$${NOMAD_TOKEN}",
     "consul": "$${CONSUL_HTTP_TOKEN}"

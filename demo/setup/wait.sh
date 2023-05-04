@@ -2,7 +2,7 @@
 set -e
 
 while [ ! -f /var/lib/cloud/instance/boot-finished ]; do
-  echo "Waiting for cloud-init to complate..."
+  echo "Waiting for cloud-init to complete..."
   sleep 5
 done
 

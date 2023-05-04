@@ -45,6 +45,7 @@ scaling  "cluster_class-batch" {
       hcloud_group_id              = "redis"
       hcloud_labels                = "key1=value1"
       hcloud_location              = "fsn1"
+      hcloud_networks              = "nomad"
       hcloud_user_data             = "{{ key "secrets/nomad/redis/user-data" }}"
       hcloud_b64_user_data_encoded = "true"
     }
@@ -61,13 +62,13 @@ scaling  "cluster_class-batch" {
 enable_debug = true
 log_level = "debug"
 nomad {
-  address = "http://{{ env "attr.unique.network.ip-address" }}:4646"
+  address = "http://{{ env "attr.nomad.advertise.address" }}"
   token   = "{{ key "secrets/nomad/token" }}"
 }
 apm "nomad" {
   driver = "nomad-apm"
   config = {
-    address = "http://{{ env "attr.unique.network.ip-address" }}:4646"
+    address = "http://{{ env "attr.nomad.advertise.address" }}"
     token   = "{{ key "secrets/nomad/token" }}"
   }
 }

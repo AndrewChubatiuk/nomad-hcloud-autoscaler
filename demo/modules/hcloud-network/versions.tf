@@ -3,8 +3,7 @@ terraform {
     hcloud = {
       source = "hetznercloud/hcloud"
     }
-    ssh = {
-      source = "AndrewChubatiuk/ssh"
-    }
   }
+  required_version = ">= 0.13"
 }
+

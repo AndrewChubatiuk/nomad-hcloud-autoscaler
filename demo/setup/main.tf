@@ -1,3 +1,7 @@
+module "network" {
+  source = "../modules/hcloud-network"
+}
+
 module "nomad" {
   source       = "../modules/hcloud-server"
   prefix       = "nomad-server"
@@ -9,6 +13,29 @@ module "nomad" {
     Role        = "server"
   }
   server_type = "cx11"
+  network_id  = module.network.id
+}
+
+data "ssh_tunnel" "nomad" {
+  remote = {
+    host = module.nomad.private_ips[0]
+    port = 4646
+  }
+  local = {
+    port = 4646
+  }
+  depends_on = [null_resource.nomad]
+}
+
+data "ssh_tunnel" "consul" {
+  remote = {
+    host = module.nomad.private_ips[0]
+    port = 8500
+  }
+  local = {
+    port = 8500
+  }
+  depends_on = [null_resource.nomad]
 }
 
 module "server_user_data" {
@@ -17,7 +44,7 @@ module "server_user_data" {
     "node_class"   = "nomad-server"
     "datacenter"   = "dc1"
     "servers"      = []
-    "interface"    = "eth0"
+    "interface"    = "ens10"
     "consul_token" = ""
     "nomad_token"  = ""
   }
@@ -28,8 +55,8 @@ module "redis_client_user_data" {
   input = {
     "node_class"   = "redis"
     "datacenter"   = "dc1"
-    "servers"      = module.nomad.ipv4_addresses
-    "interface"    = "eth0"
+    "servers"      = module.nomad.private_ips
+    "interface"    = "ens10"
     "consul_token" = jsondecode(data.local_sensitive_file.creds.content)["consul"]
     "nomad_token"  = jsondecode(data.local_sensitive_file.creds.content)["nomad"]
   }
@@ -48,7 +75,7 @@ resource "null_resource" "nomad" {
   }
 
   connection {
-    host        = module.nomad.ipv4_addresses[0]
+    host        = module.nomad.public_ips[0]
     user        = "root"
     private_key = module.nomad.private_key
   }
@@ -61,24 +88,24 @@ resource "null_resource" "nomad" {
   provisioner "remote-exec" {
     inline = [
       "chmod +x /tmp/wait.sh",
-      "/tmp/wait.sh http://${module.nomad.ipv4_addresses[0]}:4646/v1/status/leader",
+      "/tmp/wait.sh http://${module.nomad.private_ips[0]}:8500/v1/status/leader",
     ]
   }
 
   provisioner "remote-exec" {
     inline = [
       "chmod +x /tmp/wait.sh",
-      "/tmp/wait.sh http://${module.nomad.ipv4_addresses[0]}:8500/v1/status/leader",
+      "/tmp/wait.sh http://${module.nomad.private_ips[0]}:4646/v1/status/leader",
     ]
   }
 
   provisioner "local-exec" {
-    command = "scp -o \"StrictHostKeyChecking no\" -i ${local_sensitive_file.ssh.filename} root@${module.nomad.ipv4_addresses[0]}:/tmp/creds.json ${path.root}/creds.json"
+    command = "scp -o \"StrictHostKeyChecking no\" -i ${local_sensitive_file.ssh.filename} root@${module.nomad.public_ips[0]}:/tmp/api-tokens.json ${path.root}/api-tokens.json"
   }
 }
 
 data "local_sensitive_file" "creds" {
-  filename   = "${path.root}/creds.json"
+  filename   = "${path.root}/api-tokens.json"
   depends_on = [null_resource.nomad]
 }
 

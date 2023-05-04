@@ -4,7 +4,7 @@ data_dir  =  "/opt/nomad"
 %{ if datacenter != "" }
 datacenter = "${datacenter}"
 %{ endif }
-bind_addr = "0.0.0.0"
+bind_addr = "{{ GetInterfaceIP \"${interface}\" }}"
 server = {
   enabled          = %{ if length(servers) == 0 }true%{else}false%{ endif }
   bootstrap_expect = 1
@@ -16,6 +16,12 @@ advertise = {
 }
 client = {
   node_class = "${node_class}"
+  host_network "public" {
+    interface = "eth0"
+  }
+  host_network "private" {
+    interface = "ens10"
+  }
   enabled    = true%{ if length(servers) > 0 }
   servers    = ["${ join("\",\"", servers) }"]
 %{ endif }

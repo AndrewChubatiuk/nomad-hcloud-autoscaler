@@ -81,7 +81,6 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		return ut.Add("required", "{0} value is not set in a {1} config", true)
 	}, func(ut ut.Translator, fe validator.FieldError) string {
 		var configTypeName string
-		fmt.Println(fe.Namespace())
 		if strings.HasPrefix(fe.Namespace(), "hcloudTargetConfig") {
 			configTypeName = "target"
 		} else if strings.HasPrefix(fe.Namespace(), "hcloudPluginConfig") {
@@ -96,11 +95,11 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		return err
 	}
 
-	t.setupHCloudClient()
-
-	if err := parse(t.client(), config, &t.config); err != nil {
+	if err := parse(nil, config, &t.config); err != nil {
 		return fmt.Errorf("failed to parse HCloud plugin config: %v", err)
 	}
+
+	t.setupHCloudClient()
 
 	clusterUtils, err := scaleutils.NewClusterScaleUtils(nomad.ConfigFromNamespacedMap(config), t.logger)
 	if err != nil {
