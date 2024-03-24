@@ -17,7 +17,7 @@ import (
 	"github.com/hashicorp/nomad-autoscaler/sdk"
 	"github.com/hashicorp/nomad-autoscaler/sdk/helper/nomad"
 	"github.com/hashicorp/nomad-autoscaler/sdk/helper/scaleutils"
-	"github.com/hetznercloud/hcloud-go/hcloud"
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 )
 
 const (

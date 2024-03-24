@@ -9,7 +9,7 @@ import (
 
 	"github.com/creasty/defaults"
 	"github.com/google/uuid"
-	"github.com/hetznercloud/hcloud-go/hcloud"
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 	"github.com/mitchellh/mapstructure"
 )
 

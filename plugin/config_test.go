@@ -2,9 +2,10 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/hetznercloud/hcloud-go/hcloud"
 	"os"
 	"testing"
+
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 
 	"github.com/stretchr/testify/assert"
 )

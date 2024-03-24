@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/nomad/api"
-	"github.com/hetznercloud/hcloud-go/hcloud"
+	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 )
 
 // setupHCloudClient takes the passed config mapping and instantiates the
@@ -70,7 +70,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 			results = append(results, result)
 			counter++
 		}
-		var actionIDs []int
+		var actionIDs []int64
 		for _, result := range results {
 			if result.Action.Progress < 100 {
 				actionIDs = append(actionIDs, result.Action.ID)
@@ -148,7 +148,7 @@ func (t *TargetPlugin) getServers(ctx context.Context, targetConfig *hcloudTarge
 	return servers, nil
 }
 
-func (t *TargetPlugin) ensureActionsComplete(ctx context.Context, ids []int) (successfulActions []int, failedActions []int, err error) {
+func (t *TargetPlugin) ensureActionsComplete(ctx context.Context, ids []int64) (successfulActions []int64, failedActions []int64, err error) {
 
 	opts := hcloud.ActionListOpts{
 		ID: ids,
@@ -162,7 +162,7 @@ func (t *TargetPlugin) ensureActionsComplete(ctx context.Context, ids []int) (su
 
 		// Reset the action IDs we are waiting to complete so we can
 		// re-populate with a modified list later.
-		var ids []int
+		var ids []int64
 
 		// Iterate each action, check the progress and add any incomplete
 		// actions to the ID list for rechecking.
