@@ -113,7 +113,8 @@ type hcloudTargetConfig struct {
 	PlacementGroup      *hcloud.PlacementGroup         `mapstructure:"hcloud_placement_group"`
 	Firewalls           []*hcloud.ServerCreateFirewall `mapstructure:"hcloud_firewalls"`
 	Image               *hcloud.Image                  `mapstructure:"hcloud_image" default:"{\"Name\": \"ubuntu-20.04\"}" validate:"required"`
-	UserData            string                         `mapstructure:"hcloud_user_data" validate:"required"`
+	UserData            string                         `mapstructure:"hcloud_user_data" validate:"required_without=UserDataFile"`
+	UserDataFile        string                         `mapstructure:"hcloud_user_data_file" validate:"required_without=UserData"`
 	SSHKeys             []*hcloud.SSHKey               `mapstructure:"hcloud_ssh_keys" validate:"required"`
 	Labels              map[string]string              `mapstructure:"hcloud_labels"`
 	ServerType          *hcloud.ServerType             `mapstructure:"hcloud_server_type" default:"{\"Name\":\"cx11\"}" validate:"required"`

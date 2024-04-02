@@ -76,9 +76,11 @@ check "hashistack-allocated-cpu" {
 
 - `hcloud_group_id` `(string: required)` - Server group name used for filtering targeted HCloud hosts. `group-id` label is attached to a server during creation.
 
-- `hcloud_user_data` `(string: required)` - [Cloud-Init][cloud_init] user data to use during Server creation. This field is limited to 32KiB.
+- `hcloud_user_data` `(string: required)` - [Cloud-Init][cloud_init] user data to use during Server creation. This field is limited to 32KiB (must not be used together with `hcloud_user_data_file`).
 
-- `hcloud_b64_user_data_encoded` `(string: "false")` - Identifies if `hcloud_user_data` is base64 encoded or not.
+- `hcloud_b64_user_data_encoded` `(string: "false")` - Identifies if `hcloud_user_data` (or the content of the file specified in `hcloud_user_data_file`) is base64 encoded or not.
+
+- `hcloud_user_data_file` `(string: required)` - [Cloud-Init][cloud_init] user data file to use during Server creation (must not be used together with `hcloud_user_data`).
 
 - `hcloud_ssh_keys` `(string: required)` - Comma-separated IDs or names of SSH keys which should be injected into the server at creation time.
 
@@ -118,7 +120,7 @@ check "hashistack-allocated-cpu" {
 [node_selector_strategy]: /tools/autoscaling/internals/node-selector-strategy
 
 ## Demo
-Run `terraform apply` in [demo](demo/setup) folder to create: 
+Run `terraform apply` in [demo](demo/setup) folder to create:
  - nomad server which runs services for:
     - nomad-autoscaler
     - prometheus
