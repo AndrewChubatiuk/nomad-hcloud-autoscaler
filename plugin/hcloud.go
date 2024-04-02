@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/hashicorp/nomad/api"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
@@ -19,6 +21,25 @@ func (t *TargetPlugin) client() *hcloud.Client {
 	return t.hcloud
 }
 
+func readUserDataFromFile(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Println("failed to close file", err)
+		}
+	}()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // scaleOut adds HCloud servers up to desired count to match what the
 // Autoscaler has deemed required.
 func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, count int64, config map[string]string, targetConfig *hcloudTargetConfig) error {
@@ -26,6 +47,15 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, servers []*hcloud.Server, c
 	// would like on all log lines.
 	log := t.logger.With("action", "scale_out", "hcloud_group_id", targetConfig.GroupID,
 		"desired_count", count)
+
+	// try to read from userDataFile, if it is set
+	if targetConfig.UserDataFile != "" {
+		userData, err := readUserDataFromFile(targetConfig.UserDataFile)
+		if err != nil {
+			return fmt.Errorf("failed to read user data from file: %v", err)
+		}
+		targetConfig.UserData = userData
+	}
 
 	userData := targetConfig.UserData
 
